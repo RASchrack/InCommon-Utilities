@@ -73,3 +73,5 @@ if requested_list.status_code == 200:
                         requester = details['requester']
 
                         print(f"    {curID}: Expires {expires}. Requested by {requester} on {requested} with profile {profile_name}")
+                else:
+                    print("No existing certificates found.")
