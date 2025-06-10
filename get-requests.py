@@ -1,10 +1,12 @@
 #!/usr/bin/python3
 #
 
+from dotenv import load_dotenv
 import requests
 import json
 import os
-from dotenv import load_dotenv
+import ssl
+import socket
 
 # Sectigo crendentials should go in .env as environment variables
 # This keeps them from potentially being uploaded to github
@@ -44,7 +46,7 @@ if requested_list.status_code == 200:
             profile_id = certType['id']
             profile_name = certType['name']
 
-            print(f"\nRequest: {sslID} - {commonName} {status} with profile {profile_name} ({profile_id})")
+            print(f"\nRequest: {sslID} - {commonName} {status} with profile {profile_name}")
 
             existing_url = f"https://cert-manager.com/api/ssl/v1?status=Issued&commonName={commonName}"
             list_req = requests.get(existing_url, headers=headers)
@@ -54,6 +56,18 @@ if requested_list.status_code == 200:
 
                 if cert_count > 0:
                     print(f"  Found {cert_count} existing certificate(s)")
+
+                    context = ssl.create_default_context()
+
+                    try:
+                        with socket.create_connection((commonName, 443)) as sock:
+                            with context.wrap_socket(sock, server_hostname=commonName) as ssl_sock:
+                                presented_cert = ssl_sock.getpeercert()
+                                cur_serial = presented_cert.get('serialNumber')
+                                print("    --> indicates the active cert presented by the server")
+                    except:
+                            print("    Could not retrieve active cert from server")
+
                     certs = list_req.json()
 
                     for existing in certs:
@@ -71,7 +85,11 @@ if requested_list.status_code == 200:
                         expires = details['expires']
                         requested = details['requested']
                         requester = details['requester']
+                        serial = details['serialNumber'].replace(':','')
 
-                        print(f"    {curID}: Expires {expires}. Requested by {requester} on {requested} with profile {profile_name}")
+                        if cur_serial == serial:
+                            print(f"--> {curID}: Expires {expires}. Requested by {requester} on {requested} with profile {profile_name}")
+                        else:
+                            print(f"    {curID}: Expires {expires}. Requested by {requester} on {requested} with profile {profile_name}")
                 else:
-                    print("  No existing certificates found.")
+                    print("  No current certificates found.")
